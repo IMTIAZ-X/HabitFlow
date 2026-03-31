@@ -1,11 +1,11 @@
-name: Build HabitFlow Pro
+name: Debug Build HabitFlow Pro
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, develop ]
   pull_request:
     branches: [ main ]
-  workflow_dispatch:   # manual trigger
+  workflow_dispatch:
 
 jobs:
   lint-and-typecheck:
@@ -15,8 +15,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 18
-          cache: npm
-      - run: npm ci
+          # cache: npm   # removed to avoid lock file error
+      - run: npm install
       - name: Type check
         run: npx tsc --noEmit
 
@@ -28,8 +28,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 18
-          cache: npm
-      - run: npm ci
+      - run: npm install
       - name: Export web
         run: npx expo export:web
       - uses: actions/upload-artifact@v4
@@ -37,7 +36,7 @@ jobs:
           name: web-build
           path: web-build
 
-  build-android:
+  build-android-debug:
     runs-on: ubuntu-latest
     needs: lint-and-typecheck
     steps:
@@ -45,184 +44,31 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 18
-          cache: npm
-      - run: npm ci
+      - run: npm install
 
-      # Install Android SDK and dependencies
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
+
       - name: Install Android SDK
         uses: android-actions/setup-android@v3
         with:
           packages: 'platforms;android-34 build-tools;34.0.0'
 
-      # Prebuild native Android project
       - name: Prebuild Android
         run: npx expo prebuild --platform android --clean
 
-      # Decode keystore if provided
-      - name: Decode Keystore
-        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
-        run: echo ${{ secrets.ANDROID_KEYSTORE_BASE64 }} | base64 --decode > android/app/keystore.jks
-
-      # Build APK (release)
-      - name: Build APK
+      - name: Build Debug APK
         run: |
           cd android
-          if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
-            ./gradlew assembleRelease
-          else
-            ./gradlew assembleDebug
-          fi
-        env:
-          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ./gradlew assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: android-apk
-          path: android/app/build/outputs/apk/**/*.apk
+          name: android-debug-apk
+          path: android/app/build/outputs/apk/debug/*.apk
 
-  build-ios:
-    runs-on: macos-latest   # required for iOS builds
-    needs: lint-and-typecheck
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 18
-          cache: npm
-      - run: npm ci
-
-      # Install CocoaPods
-      - name: Install CocoaPods
-        run: |
-          gem install cocoapods
-          pod setup
-
-      # Prebuild iOS project
-      - name: Prebuild iOS
-        run: npx expo prebuild --platform ios --clean
-
-      # Install pods
-      - name: Install pods
-        run: |
-          cd ios
-          pod install
-
-      # Decode certificate and provisioning profile if provided
-      - name: Decode certificate
-        if: ${{ secrets.CERTIFICATE_P12_BASE64 != '' }}
-        run: echo ${{ secrets.CERTIFICATE_P12_BASE64 }} | base64 --decode > certificate.p12
-      - name: Import certificate
-        if: ${{ secrets.CERTIFICATE_P12_BASE64 != '' }}
-        run: |
-          security create-keychain -p "" build.keychain
-          security default-keychain -s build.keychain
-          security unlock-keychain -p "" build.keychain
-          security import certificate.p12 -k build.keychain -P "${{ secrets.CERTIFICATE_PASSWORD }}" -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
-
-      # Build iOS (simulator if no signing, else device)
-      - name: Build iOS
-        run: |
-          cd ios
-          if [ -n "${{ secrets.CERTIFICATE_P12_BASE64 }}" ]; then
-            xcodebuild -workspace HabitFlow.xcworkspace -scheme HabitFlow -configuration Release -sdk iphoneos -archivePath HabitFlow.xcarchive archive
-            xcodebuild -exportArchive -archivePath HabitFlow.xcarchive -exportOptionsPlist exportOptions.plist -exportPath ./build
-          else
-            xcodebuild -workspace HabitFlow.xcworkspace -scheme HabitFlow -configuration Debug -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 15'
-          fi
-        env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          TEAM_ID: ${{ secrets.TEAM_ID }}
-
-      - name: Upload IPA (if signed)
-        if: ${{ secrets.CERTIFICATE_P12_BASE64 != '' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: ios-ipa
-          path: ios/build/*.ipa
-
-  build-desktop:
-    runs-on: ubuntu-latest
-    needs: build-web
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 18
-          cache: npm
-      - name: Install electron-builder
-        run: npm install -g electron electron-builder
-
-      # Download web build
-      - uses: actions/download-artifact@v4
-        with:
-          name: web-build
-          path: web-build
-
-      # Create a simple Electron app that loads the web build
-      - name: Create Electron app
-        run: |
-          mkdir electron-app
-          cd electron-app
-          npm init -y
-          npm install electron
-          cat > main.js <<EOF
-          const { app, BrowserWindow } = require('electron');
-          function createWindow() {
-            const win = new BrowserWindow({ width: 1200, height: 800 });
-            win.loadFile('../web-build/index.html');
-          }
-          app.whenReady().then(createWindow);
-          app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
-          EOF
-          cat > package.json <<EOF
-          {
-            "name": "habitflow-desktop",
-            "version": "1.0.0",
-            "main": "main.js",
-            "scripts": {
-              "start": "electron .",
-              "dist": "electron-builder"
-            },
-            "build": {
-              "appId": "com.example.habitflow",
-              "productName": "HabitFlow Pro",
-              "directories": { "output": "dist" },
-              "files": ["main.js", "../web-build/**/*"]
-            }
-          }
-          EOF
-          npm run dist
-          cd ..
-
-      - name: Upload desktop builds
-        uses: actions/upload-artifact@v4
-        with:
-          name: desktop-builds
-          path: electron-app/dist/*
-
-  # Optional: Deploy web to GitHub Pages
-  deploy-web:
-    runs-on: ubuntu-latest
-    needs: build-web
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: web-build
-          path: web-build
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./web-build
-          publish_branch: gh-pages
+  # desktop and deploy steps are commented out – no build-desktop, no deploy-web
