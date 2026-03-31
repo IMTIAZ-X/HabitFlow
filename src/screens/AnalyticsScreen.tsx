@@ -62,7 +62,7 @@ const AnalyticsScreen = () => {
           colorScale={['#0d9668', '#e6a817', '#6366f1', '#ec4899', '#f97316']}
           width={width - 32}
           height={250}
-          labelRadius={({ innerRadius }) => innerRadius + 30}
+          labelRadius={({ innerRadius }) => (innerRadius !== undefined ? innerRadius + 30 : 30)}
           style={{ labels: { fontSize: 12, fill: '#2d2d2d' } }}
         />
       </View>

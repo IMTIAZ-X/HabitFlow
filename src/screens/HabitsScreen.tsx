@@ -30,6 +30,7 @@ const HabitsScreen = () => {
     category: 'Other',
     frequency: 'daily' as 'daily' | 'custom',
     customDays: [] as number[],
+    archived: false, // added to match Omit<Habit, 'id'|'createdAt'>
   });
   const [quote, setQuote] = useState(QUOTES[Math.floor(Math.random() * QUOTES.length)]);
 
@@ -53,7 +54,8 @@ const HabitsScreen = () => {
       Alert.alert('Error', 'Please select at least one day');
       return;
     }
-    addHabit(newHabit);
+    // Pass the new habit with archived: false
+    addHabit({ ...newHabit, archived: false });
     setAddModalVisible(false);
     setNewHabit({
       name: '',
@@ -61,6 +63,7 @@ const HabitsScreen = () => {
       category: 'Other',
       frequency: 'daily',
       customDays: [],
+      archived: false,
     });
   };
 
@@ -82,6 +85,7 @@ const HabitsScreen = () => {
       category: template.category,
       frequency: template.frequency,
       customDays: template.customDays,
+      archived: false, // important
     });
     setTemplateModalVisible(false);
   };

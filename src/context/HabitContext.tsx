@@ -36,7 +36,18 @@ export const HabitProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setEntries(data.entries);
     setAchievements(data.achievements);
     setTimerSessions(data.timerSessions);
-    setSettings(data.settings);
+
+    // Validate accent color
+    const validAccents = ['emerald', 'amber', 'rose', 'cyan', 'violet'] as const;
+    let accent: Settings['accent'] = data.settings.accent;
+    if (!validAccents.includes(accent)) {
+      accent = 'emerald';
+    }
+    const validatedSettings: Settings = {
+      ...data.settings,
+      accent,
+    };
+    setSettings(validatedSettings);
   };
 
   useEffect(() => {
