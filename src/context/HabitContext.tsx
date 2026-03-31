@@ -39,7 +39,11 @@ export const HabitProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     // Validate accent color
     const validAccents: Settings['accent'][] = ['emerald', 'amber', 'rose', 'cyan', 'violet'];
-    let accent: Settings['accent'] = validAccents.includes(data.settings.accent as any) ? data.settings.accent : 'emerald';
+    let accent: Settings['accent'] = 'emerald';
+    const savedAccent = data.settings.accent;
+    if (savedAccent && validAccents.includes(savedAccent as any)) {
+      accent = savedAccent as Settings['accent'];
+    }
     const validatedSettings: Settings = {
       ...data.settings,
       accent,
