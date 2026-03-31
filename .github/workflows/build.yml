@@ -58,27 +58,16 @@ jobs:
         with:
           packages: 'platforms;android-34 build-tools;34.0.0'
 
-      # Create missing asset files (if not present) – required for prebuild
-      - name: Ensure assets folder exists
+      # Remove any existing assets and replace with PNG placeholders (no WebP)
+      - name: Replace assets with PNG placeholders
         run: |
+          rm -rf assets
           mkdir -p assets
-          if [ ! -f assets/icon.png ]; then
-            echo "Creating placeholder icon.png"
-            # Create a 1x1 transparent PNG (base64)
-            echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" | base64 -d > assets/icon.png
-          fi
-          if [ ! -f assets/adaptive-icon.png ]; then
-            echo "Creating placeholder adaptive-icon.png"
-            cp assets/icon.png assets/adaptive-icon.png
-          fi
-          if [ ! -f assets/splash.png ]; then
-            echo "Creating placeholder splash.png"
-            cp assets/icon.png assets/splash.png
-          fi
-          if [ ! -f assets/favicon.png ]; then
-            echo "Creating placeholder favicon.png"
-            cp assets/icon.png assets/favicon.png
-          fi
+          # 1x1 transparent PNG (base64)
+          echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" | base64 -d > assets/icon.png
+          cp assets/icon.png assets/adaptive-icon.png
+          cp assets/icon.png assets/splash.png
+          cp assets/icon.png assets/favicon.png
 
       - name: Prebuild Android
         run: npx expo prebuild --platform android --clean
